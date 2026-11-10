@@ -11,6 +11,7 @@
 
 <header class="topbar">
   <div class="brand">
+    <span class="brand-mark">Σ</span>
     <div>
       <h1>Розподілена система обчислень</h1>
       <p class="sub">HTTPS · балансування навантаження · черга · автомасштабування</p>
@@ -28,30 +29,43 @@
 
   <!-- ============================ AUTH ============================ -->
   <section id="authView" class="view">
-    <div class="auth-card">
-      <h2>Вхід до системи</h2>
-      <p class="muted">Авторизація обов'язкова: задачі прив'язані до користувача.</p>
-
-      <div class="tabs">
-        <button class="tab active" data-auth="login">Вхід</button>
-        <button class="tab" data-auth="register">Реєстрація</button>
+    <div class="auth-wrap">
+      <div class="auth-hero">
+        <h2>Трудомісткі обчислення — <em>розподілені</em>.</h2>
+        <p>Розв'язання рівняння Пуассона на сітці до 250 000 невідомих. Балансувальник розподіляє задачі між серверами застосунків, черга з оцінкою часу очікування, автомасштабування пулу.</p>
+        <ul class="auth-points">
+          <li>HTTPS + WSS, авторизація JWT</li>
+          <li>Балансування навантаження на ≥ 2 сервери</li>
+          <li>Прогрес у реальному часі через WebSocket</li>
+          <li>Черга з приблизним часом очікування</li>
+        </ul>
       </div>
 
-      <form id="authForm" autocomplete="on">
-        <label>Email
-          <input type="email" id="email" required placeholder="user@local">
-        </label>
-        <label>Пароль
-          <input type="password" id="password" required minlength="6" placeholder="••••••">
-        </label>
-        <button type="submit" class="btn primary" id="authSubmit">Увійти</button>
-        <p id="authError" class="error hidden"></p>
-      </form>
+      <div class="auth-card">
+        <h2>Вхід до системи</h2>
+        <p class="muted small">Авторизація обов'язкова: задачі прив'язані до користувача.</p>
 
-      <div class="demo-accounts">
-        <strong>Демо-акаунти</strong>
-        <code>user@local / user123</code>
-        <code>admin@local / admin123</code>
+        <div class="tabs">
+          <button class="tab active" data-auth="login">Вхід</button>
+          <button class="tab" data-auth="register">Реєстрація</button>
+        </div>
+
+        <form id="authForm" autocomplete="on">
+          <label>Email
+            <input type="email" id="email" required placeholder="user@local">
+          </label>
+          <label>Пароль
+            <input type="password" id="password" required minlength="6" placeholder="••••••">
+          </label>
+          <button type="submit" class="btn primary" id="authSubmit">Увійти</button>
+          <p id="authError" class="error hidden"></p>
+        </form>
+
+        <div class="demo-accounts">
+          <strong>Демо-акаунти</strong>
+          <code>user@local / user123</code>
+          <code>admin@local / admin123</code>
+        </div>
       </div>
     </div>
   </section>
@@ -110,6 +124,15 @@
         <div class="bar big"><div id="loadBar" class="bar-fill"></div></div>
         <p class="muted small">Балансувальник розподіляє задачі на найменш завантажений сервер застосунку. Якщо всі слоти зайняті — задача стає в чергу із зазначенням приблизного часу очікування.</p>
         <div id="queueInfo" class="queue-info hidden"></div>
+        <div class="system-note">
+          <div class="system-note-title">Як це працює</div>
+          <ol>
+            <li>Задача потрапляє в чергу в БД</li>
+            <li>Планувальник обирає найменш завантажений сервер</li>
+            <li>Обчислення йде у <code>worker_threads</code></li>
+            <li>Прогрес летить у браузер через WSS</li>
+          </ol>
+        </div>
       </div>
 
       <!-- Мої задачі -->

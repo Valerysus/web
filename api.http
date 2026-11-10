@@ -1,0 +1,76 @@
+### Демонстрація API на захисті
+### Відкрий цей файл у VS Code і натискай "Send Request" над кожним блоком.
+
+@base = https://localhost:8443
+
+### 1. Ліміти обчислень (публічно)
+GET {{base}}/api/limits
+
+### 2. Вхід користувача
+# @name login
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@local",
+  "password": "user123"
+}
+
+### 3. Вхід адміністратора
+# @name admin
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@local",
+  "password": "admin123"
+}
+
+### 4. Створити задачу (у межах ліміту)
+POST {{base}}/api/jobs
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.token}}
+
+{
+  "n": 40000,
+  "maxIter": 2000,
+  "tol": 0.000001,
+  "omega": 0.9
+}
+
+### 5. Відмова: перевищено трудомісткість (422)
+POST {{base}}/api/jobs
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.token}}
+
+{
+  "n": 200000,
+  "maxIter": 20000,
+  "tol": 0.000001,
+  "omega": 1.9
+}
+
+### 6. Історія задач
+GET {{base}}/api/jobs
+Authorization: Bearer {{login.response.body.token}}
+
+### 7. Метрики системи (лише адмін)
+GET {{base}}/api/admin/overview
+Authorization: Bearer {{admin.response.body.token}}
+
+### 8. Журнал серверів і подій
+GET {{base}}/api/admin/log
+Authorization: Bearer {{admin.response.body.token}}
+
+### 9. Ручне масштабування: додати сервер
+POST {{base}}/api/admin/scale
+Content-Type: application/json
+Authorization: Bearer {{admin.response.body.token}}
+
+{
+  "action": "up"
+}
+
+### 10. Журнал серверів після масштабування
+GET {{base}}/api/admin/log
+Authorization: Bearer {{admin.response.body.token}}

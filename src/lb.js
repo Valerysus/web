@@ -25,7 +25,7 @@ const {
   LIMITS, MAX_ACTIVE_JOBS_PER_USER, MAX_HISTORY_JOBS_PER_USER,
   JWT_SECRET, JWT_TTL, SCHEDULER_TICK_MS, MIN_WORKERS, MAX_WORKERS, WORKER_CAPACITY
 } = require('./config');
-const { db, logEvent, logWorker } = require('./db');
+const { db, logEvent } = require('./db');
 const { WorkerPool } = require('./pool');
 
 const pool = new WorkerPool();
@@ -45,8 +45,6 @@ function loadCertificates() {
 
 /* --------------------------------------------------------------- helpers */
 
-const nowIso = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
-
 function jobRow(id) {
   return db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
 }
@@ -63,6 +61,7 @@ function jobDto(row) {
     progress: row.progress,
     stage: row.stage,
     iterations: row.iterations,
+    delta: row.delta,
     residual: row.residual,
     workerId: row.worker_id,
     error: row.error,
@@ -84,7 +83,7 @@ function averageDuration() {
 
 function queueSnapshot() {
   const queued = db.prepare(
-    "SELECT id, user_id, created_at FROM jobs WHERE status = 'queued' ORDER BY created_at ASC"
+    "SELECT id, created_at FROM jobs WHERE status = 'queued' ORDER BY created_at ASC"
   ).all();
   const avg = averageDuration();
   const capacity = Math.max(1, pool.totalCapacity);
@@ -169,6 +168,41 @@ function adminOnly(req, res, next) {
   next();
 }
 
+/* ------------------------------------------------------------ rate limit */
+
+/** Простий ліміт спроб входу: 10 невдач на 15 хвилин з однієї IP. */
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILS = 10;
+
+function loginRateLimit(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+
+  if (entry && now - entry.first > LOGIN_WINDOW_MS) loginAttempts.delete(ip);
+  const current = loginAttempts.get(ip);
+  if (current && current.fails >= LOGIN_MAX_FAILS) {
+    const retryAfter = Math.ceil((LOGIN_WINDOW_MS - (now - current.first)) / 1000);
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({
+      error: `Забагато невдалих спроб входу. Спробуйте через ${Math.ceil(retryAfter / 60)} хв.`
+    });
+  }
+  next();
+}
+
+function noteLoginFailure(req) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const entry = loginAttempts.get(ip);
+  if (entry) entry.fails += 1;
+  else loginAttempts.set(ip, { fails: 1, first: Date.now() });
+}
+
+function clearLoginFailures(req) {
+  loginAttempts.delete(req.ip || req.socket.remoteAddress || 'unknown');
+}
+
 /* ------------------------------------------------------------------- auth */
 
 app.post('/api/auth/register', wrap(async (req, res) => {
@@ -188,14 +222,16 @@ app.post('/api/auth/register', wrap(async (req, res) => {
   res.status(201).json({ token, user });
 }));
 
-app.post('/api/auth/login', wrap(async (req, res) => {
+app.post('/api/auth/login', loginRateLimit, wrap(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
 
   const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!row || !(await bcrypt.compare(password, row.password_hash))) {
+    noteLoginFailure(req);
     return res.status(401).json({ error: 'Невірний email або пароль' });
   }
+  clearLoginFailures(req);
   const user = { id: row.id, email: row.email, role: row.role };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: JWT_TTL });
   res.json({ token, user });
@@ -229,12 +265,9 @@ app.post('/api/jobs', auth, (req, res) => {
 
   const id = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO jobs (id, user_id, status, n, max_iter, tol, stage)
-    VALUES (?, ?, 'queued', ?, ?, ?, 'у черзі')
-  `).run(id, req.user.id, value.n, value.maxIter, value.tol);
-
-  db.prepare('UPDATE jobs SET result_json = ? WHERE id = ?')
-    .run(JSON.stringify({ omega: value.omega, workUnits: value.workUnits }), id);
+    INSERT INTO jobs (id, user_id, status, n, max_iter, tol, omega, stage)
+    VALUES (?, ?, 'queued', ?, ?, ?, ?, 'у черзі')
+  `).run(id, req.user.id, value.n, value.maxIter, value.tol, value.omega);
 
   logEvent(id, `Задачу створено: n=${value.n}, ітерацій=${value.maxIter}, точність=${value.tol}`);
 
@@ -380,9 +413,9 @@ const internal = http.createServer((req, res) => {
       const row = jobRow(body.jobId);
       if (row && row.status === 'running') {
         db.prepare(`
-          UPDATE jobs SET progress = ?, stage = ?, iterations = ?, residual = ? WHERE id = ?
+          UPDATE jobs SET progress = ?, stage = ?, iterations = ?, delta = ? WHERE id = ?
         `).run(body.progress ?? row.progress, body.stage ?? row.stage,
-               body.iterations ?? row.iterations, body.residual ?? row.residual, body.jobId);
+               body.iterations ?? row.iterations, body.delta ?? row.delta, body.jobId);
         broadcastJob(jobDto(jobRow(body.jobId)));
       }
     } else if (url.pathname === '/internal/complete') {
@@ -390,22 +423,29 @@ const internal = http.createServer((req, res) => {
       if (row) {
         const result = body.result || {};
         const cancelled = row.cancel_flag === 1 || result.stopped === 'cancelled';
-        const status = cancelled ? 'cancelled' : (result.stopped === 'timeout' ? 'failed' : 'done');
+        const timedOut = result.stopped === 'timeout';
+        const status = cancelled ? 'cancelled' : (timedOut ? 'failed' : 'done');
+        const stage = cancelled
+          ? 'скасовано'
+          : timedOut
+            ? 'перевищено ліміт часу'
+            : (result.converged ? 'завершено' : 'завершено без збіжності');
         db.prepare(`
-          UPDATE jobs SET status = ?, progress = ?, stage = ?, iterations = ?, residual = ?,
-            result_json = ?, error = ?, finished_at = datetime('now') WHERE id = ?
+          UPDATE jobs SET status = ?, progress = ?, stage = ?, iterations = ?, delta = ?,
+            residual = ?, result_json = ?, error = ?, finished_at = datetime('now') WHERE id = ?
         `).run(
           status,
           cancelled ? row.progress : 100,
-          cancelled ? 'скасовано' : (status === 'done' ? 'завершено' : 'перевищено ліміт часу'),
+          stage,
           result.iterations ?? row.iterations,
+          result.delta ?? row.delta,
           result.residual ?? row.residual,
           JSON.stringify(result),
-          status === 'failed' ? 'Перевищено ліміт часу виконання' : null,
+          timedOut ? 'Перевищено ліміт часу виконання' : null,
           body.jobId
         );
         logEvent(body.jobId, status === 'done'
-          ? `Завершено: ітерацій ${result.iterations}, норма ${Number(result.solutionNorm).toFixed(4)}`
+          ? `Завершено: ітерацій ${result.iterations}, похибка ${Number(result.maxError).toExponential(2)}`
           : `Задача завершилась зі статусом ${status}`);
         pool.release(body.jobId);
         broadcastJob(jobDto(jobRow(body.jobId)));
@@ -465,10 +505,9 @@ async function tick() {
     for (const job of queued) {
       const worker = pool.pick();
       if (!worker) break;
-      const meta = job.result_json ? JSON.parse(job.result_json) : {};
       const dispatched = await pool.dispatch({
         id: job.id, n: job.n, maxIter: job.max_iter, tol: job.tol,
-        seed: 1, omega: meta.omega ?? 1
+        seed: 1, omega: job.omega ?? 1
       });
       if (dispatched) {
         db.prepare(`

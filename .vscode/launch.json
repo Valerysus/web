@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Запустити систему (npm start)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/start.js",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Тести ядра",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/test-solver.js",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Smoke-тест API",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/smoke-test.js",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    },
+    {
+      "name": "Тест ізоляції задач",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/test-isolation.js",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  ]
+}

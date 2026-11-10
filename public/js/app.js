@@ -8,11 +8,19 @@ const state = {
   limits: null,
   jobs: [],
   ws: null,
+  adminTimer: null,
   authMode: 'login'
 };
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
+
+/** Екранування тексту перед вставкою в innerHTML. */
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
 
 /* -------------------------------------------------------------------- api */
 
@@ -206,7 +214,7 @@ function renderJobs() {
     const result = j.result && j.result.iterations
       ? `<div class="job-result">ітерацій: ${j.result.iterations} · сітка: ${j.result.gridSize}×${j.result.gridSize} · зміна: ${Number(j.result.delta).toExponential(2)} · нев'язка: ${Number(j.result.residual).toExponential(2)} · похибка: ${Number(j.result.maxError).toExponential(2)}</div>`
       : '';
-    const err = j.error ? `<div class="job-result" style="color:#ff9ba0">${j.error}</div>` : '';
+    const err = j.error ? `<div class="job-result job-error">${esc(j.error)}</div>` : '';
 
     return `
       <div class="job">
@@ -214,21 +222,21 @@ function renderJobs() {
           <div>
             <div class="job-title">Пуассон · невідомих ${j.n.toLocaleString('uk-UA')} · ε = ${j.tol}</div>
             <div class="job-meta">
-              <span>${j.createdAt}</span>
-              <span>сервер: ${j.workerId || '—'}</span>
+              <span>${esc(j.created_at || j.createdAt)}</span>
+              <span>сервер: ${esc(j.workerId || '—')}</span>
               <span>${j.iterations || 0} ітерацій${eta}</span>
             </div>
           </div>
           <div class="row">
-            <span class="pill ${j.status}">${statusLabel(j.status)}</span>
-            ${canCancel ? `<button class="btn ghost small danger" data-cancel="${j.id}">Скасувати</button>` : ''}
+            <span class="pill ${esc(j.status)}">${esc(statusLabel(j.status))}</span>
+            ${canCancel ? `<button class="btn ghost small danger" data-cancel="${esc(j.id)}">Скасувати</button>` : ''}
           </div>
         </div>
         <div class="job-progress">
-          <div class="bar"><div class="bar-fill" style="width:${j.progress}%"></div></div>
-          <span>${j.progress}%</span>
+          <div class="bar"><div class="bar-fill" style="width:${Number(j.progress) || 0}%"></div></div>
+          <span>${Number(j.progress) || 0}%</span>
         </div>
-        <div class="job-stage">${j.stage}</div>
+        <div class="job-stage">${esc(j.stage)}</div>
         ${result}${err}
       </div>`;
   }).join('');
@@ -324,18 +332,18 @@ async function loadAdmin() {
 
     document.querySelector('#serversTable').querySelector('tbody').innerHTML = data.pool.servers.map((s) => `
       <tr>
-        <td>${s.id}</td>
-        <td>${s.port}</td>
-        <td>${s.active}</td>
-        <td>${s.capacity}</td>
-        <td>${s.uptimeSec} с</td>
-        <td>${s.idleSec} с</td>
+        <td>${esc(s.id)}</td>
+        <td>${Number(s.port)}</td>
+        <td>${Number(s.active)}</td>
+        <td>${Number(s.capacity)}</td>
+        <td>${Number(s.uptimeSec)} с</td>
+        <td>${Number(s.idleSec)} с</td>
       </tr>`).join('');
 
     const log = await api('/api/admin/log');
     document.querySelector('#adminLog').innerHTML = [
-      ...log.workers.map((w) => `<div><span class="t">${w.created_at}</span> [${w.worker_id}] ${w.action} ${w.detail || ''}</div>`),
-      ...log.events.map((e) => `<div><span class="t">${e.created_at}</span> [job n=${e.n}] ${e.message}</div>`)
+      ...log.workers.map((w) => `<div><span class="t">${esc(w.created_at)}</span> [${esc(w.worker_id)}] ${esc(w.action)} ${esc(w.detail || '')}</div>`),
+      ...log.events.map((e) => `<div><span class="t">${esc(e.created_at)}</span> [job n=${Number(e.n)}] ${esc(e.message)}</div>`)
     ].join('');
   } catch { /* не адмін або мережа */ }
 }
@@ -388,7 +396,8 @@ async function boot() {
   connectWs();
   if (state.user.role === 'admin') {
     await loadAdmin();
-    setInterval(loadAdmin, 3000);
+    if (state.adminTimer) clearInterval(state.adminTimer);
+    state.adminTimer = setInterval(loadAdmin, 3000);
   }
 }
 

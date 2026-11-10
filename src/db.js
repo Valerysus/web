@@ -30,7 +30,9 @@ db.exec(`
     progress     INTEGER NOT NULL DEFAULT 0,
     stage        TEXT NOT NULL DEFAULT 'у черзі',
     iterations   INTEGER NOT NULL DEFAULT 0,
+    delta        REAL,
     residual     REAL,
+    omega        REAL NOT NULL DEFAULT 1,
     result_json  TEXT,
     error        TEXT,
     worker_id    TEXT,
@@ -58,6 +60,17 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+/** Міграція для баз, створених попередніми версіями. */
+function ensureColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn('jobs', 'delta', 'REAL');
+ensureColumn('jobs', 'omega', 'REAL NOT NULL DEFAULT 1');
 
 function logEvent(jobId, message) {
   db.prepare('INSERT INTO job_events (job_id, message) VALUES (?, ?)').run(jobId, message);

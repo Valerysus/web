@@ -6,8 +6,6 @@
  * Запуск: node scripts/smoke-test.js (система має бути вже запущена)
  */
 
-const https = require('node:https');
-
 const BASE = process.env.BASE_URL || 'https://localhost:8443';
 
 let passed = 0;

@@ -1,0 +1,28 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": ["javascript"],
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "cSpell.language": "en,uk",
+  "cSpell.words": [
+    "bcryptjs",
+    "selfsigned",
+    "jsonwebtoken",
+    "Пуассона",
+    "невідомих",
+    "релаксації",
+    "трудомісткість",
+    "балансувальник",
+    "автомасштабування"
+  ],
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/data": true,
+    "**/certs": true
+  }
+}

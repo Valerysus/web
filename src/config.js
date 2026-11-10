@@ -43,7 +43,6 @@ module.exports = {
   JWT_TTL: '12h',
 
   // Автомасштабування
-  SCALE_UP_QUEUE_THRESHOLD: 1,
   SCALE_DOWN_IDLE_MS: 45_000,
   SCHEDULER_TICK_MS: 400
 };

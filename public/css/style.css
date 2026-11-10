@@ -312,6 +312,7 @@ input:focus {
   color: var(--muted);
   font-family: ui-monospace, "Cascadia Mono", monospace;
 }
+.job-error { color: var(--danger); }
 
 /* ---------- table ---------- */
 .table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .5rem; }

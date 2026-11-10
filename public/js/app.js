@@ -204,7 +204,7 @@ function renderJobs() {
     const canCancel = j.status === 'queued' || j.status === 'running';
     const eta = j.status === 'queued' && j.etaSeconds ? ` · очікування ≈ ${j.etaSeconds} с` : '';
     const result = j.result && j.result.iterations
-      ? `<div class="job-result">ітерацій: ${j.result.iterations} · сітка: ${j.result.gridSize}×${j.result.gridSize} · нев'язка: ${Number(j.result.residual).toExponential(2)} · похибка: ${Number(j.result.maxError).toExponential(2)}</div>`
+      ? `<div class="job-result">ітерацій: ${j.result.iterations} · сітка: ${j.result.gridSize}×${j.result.gridSize} · зміна: ${Number(j.result.delta).toExponential(2)} · нев'язка: ${Number(j.result.residual).toExponential(2)} · похибка: ${Number(j.result.maxError).toExponential(2)}</div>`
       : '';
     const err = j.error ? `<div class="job-result" style="color:#ff9ba0">${j.error}</div>` : '';
 
@@ -270,7 +270,7 @@ function renderSystem(pool, queue) {
   if (queue) {
     document.querySelector('#statQueue').textContent = queue.length;
     if (queue.length) {
-      showQueueInfo(`У черзі ${queue.length} задач. Наступна почнеться ≈ через ${queue[0].etaSeconds} с.`);
+      showQueueInfo(`У черзі ${queue.length} задач. Наступна почнеться ≈ через ${queue.nextEtaSeconds} с.`);
     } else {
       document.querySelector('#queueInfo').classList.add('hidden');
     }
@@ -290,9 +290,16 @@ function connectWs() {
     try { msg = JSON.parse(event.data); } catch { return; }
 
     if (msg.type === 'job') {
+      // Сервер надсилає лише власні задачі (і задачі всіх користувачів для адміна),
+      // тому невідому задачу додаємо тільки якщо вона справді належить нам.
       const idx = state.jobs.findIndex((j) => j.id === msg.job.id);
-      if (idx >= 0) state.jobs[idx] = { ...state.jobs[idx], ...msg.job };
-      else state.jobs.unshift(msg.job);
+      if (idx >= 0) {
+        state.jobs[idx] = { ...state.jobs[idx], ...msg.job };
+      } else if (state.user.role === 'admin' || msg.job.userId === state.user.id) {
+        state.jobs.unshift(msg.job);
+      } else {
+        return;
+      }
       renderJobs();
     } else if (msg.type === 'queue') {
       renderSystem(msg.pool, msg.queue);
@@ -354,7 +361,7 @@ $$('.nav-btn').forEach((btn) => {
     $$('.nav-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     $$('.view').forEach((v) => v.classList.add('hidden'));
-    const map = { app: '#appView', theory: '#theoryView', arch: '#archView' };
+    const map = { app: '#appView', arch: '#archView' };
     document.querySelector(map[btn.dataset.view]).classList.remove('hidden');
   });
 });

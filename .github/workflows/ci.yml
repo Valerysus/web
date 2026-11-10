@@ -40,3 +40,4 @@ jobs:
             sleep 1
           done
           node scripts/smoke-test.js
+          node scripts/test-isolation.js

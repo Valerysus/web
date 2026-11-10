@@ -27,14 +27,20 @@ console.log('Тести обчислювального ядра (рівнянн�
 test('мала сітка збігається до заданої точності', () => {
   const r = solve({ n: 400, maxIter: 5000, tol: 1e-8, omega: 1.9 });
   assert.ok(r.converged, 'очікувалась збіжність');
-  assert.ok(r.residual < 1e-8, `нев'язка ${r.residual} завелика`);
+  assert.ok(r.delta < 1e-8, `зміна за ітерацію ${r.delta} завелика`);
   assert.ok(r.iterations > 0 && r.iterations <= 5000);
 });
 
-test('сітка 401×401 дає прийнятну похибку відносно аналітичного розв\'язку', () => {
-  const r = solve({ n: 160000, maxIter: 3000, tol: 1e-6, omega: 1.9 });
-  assert.strictEqual(r.gridSize, 401);
-  assert.ok(r.maxError < 0.05, `похибка ${r.maxError} завелика`);
+test('сітка 400×400 дає малу похибку відносно аналітичного розв\'язку', () => {
+  const r = solve({ n: 160000, maxIter: 8000, tol: 1e-6, omega: 1.9 });
+  assert.strictEqual(r.gridSize, 400);
+  assert.ok(r.maxError < 1e-3, `похибка ${r.maxError} завелика`);
+});
+
+test('крок сітки узгоджений з межами області (h = 1/(inner+1))', () => {
+  const r = solve({ n: 40000, maxIter: 2000, tol: 1e-6, omega: 1.9 });
+  assert.strictEqual(r.gridSize, 200);
+  assert.ok(r.maxError < 5e-4, `похибка ${r.maxError} вказує на зсув сітки`);
 });
 
 test('прогрес монотонно зростає і не перевищує 100', () => {
@@ -68,7 +74,7 @@ test('перевищення дедлайну повертає статус time
 test('детермінованість: однаковий сід — однаковий результат', () => {
   const a = solve({ n: 10000, maxIter: 300, tol: 1e-12, omega: 1.9, seed: 42 });
   const b = solve({ n: 10000, maxIter: 300, tol: 1e-12, omega: 1.9, seed: 42 });
-  assert.strictEqual(a.residual, b.residual);
+  assert.strictEqual(a.delta, b.delta);
   assert.deepStrictEqual(a.profile, b.profile);
 });
 

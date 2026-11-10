@@ -55,6 +55,7 @@ function jobDto(row) {
   if (!row) return null;
   return {
     id: row.id,
+    userId: row.user_id,
     status: row.status,
     n: row.n,
     maxIter: row.max_iter,
@@ -290,7 +291,7 @@ app.post('/api/jobs/:id/cancel', auth, wrap(async (req, res) => {
       finished_at = datetime('now') WHERE id = ?
   `).run(row.id);
   logEvent(row.id, 'Задачу скасовано користувачем');
-  broadcast({ type: 'job', job: jobDto(jobRow(row.id)) });
+  broadcastJob(jobDto(jobRow(row.id)));
   res.json({ ok: true });
 }));
 
@@ -382,7 +383,7 @@ const internal = http.createServer((req, res) => {
           UPDATE jobs SET progress = ?, stage = ?, iterations = ?, residual = ? WHERE id = ?
         `).run(body.progress ?? row.progress, body.stage ?? row.stage,
                body.iterations ?? row.iterations, body.residual ?? row.residual, body.jobId);
-        broadcast({ type: 'job', job: jobDto(jobRow(body.jobId)) });
+        broadcastJob(jobDto(jobRow(body.jobId)));
       }
     } else if (url.pathname === '/internal/complete') {
       const row = jobRow(body.jobId);
@@ -407,7 +408,7 @@ const internal = http.createServer((req, res) => {
           ? `Завершено: ітерацій ${result.iterations}, норма ${Number(result.solutionNorm).toFixed(4)}`
           : `Задача завершилась зі статусом ${status}`);
         pool.release(body.jobId);
-        broadcast({ type: 'job', job: jobDto(jobRow(body.jobId)) });
+        broadcastJob(jobDto(jobRow(body.jobId)));
       }
     } else if (url.pathname === '/internal/fail') {
       db.prepare(`
@@ -416,7 +417,7 @@ const internal = http.createServer((req, res) => {
       `).run(String(body.error || 'Невідома помилка'), body.jobId);
       logEvent(body.jobId, `Помилка: ${body.error}`);
       pool.release(body.jobId);
-      broadcast({ type: 'job', job: jobDto(jobRow(body.jobId)) });
+      broadcastJob(jobDto(jobRow(body.jobId)));
     }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{"ok":true}');
@@ -475,7 +476,7 @@ async function tick() {
             stage = 'виконується', progress = 1 WHERE id = ?
         `).run(dispatched.id, job.id);
         logEvent(job.id, `Задачу передано на сервер ${dispatched.id}`);
-        broadcast({ type: 'job', job: jobDto(jobRow(job.id)) });
+        broadcastJob(jobDto(jobRow(job.id)));
       }
     }
 
@@ -483,10 +484,14 @@ async function tick() {
     const remaining = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status = 'queued'").get().c;
     await pool.autoscale(remaining);
 
-    // 4. Періодичне оновлення черги для клієнтів
+    // 4. Періодичне оновлення черги для клієнтів (без ідентифікаторів чужих задач)
+    const snapshot = queueSnapshot();
     broadcast({
       type: 'queue',
-      queue: queueSnapshot(),
+      queue: {
+        length: snapshot.length,
+        nextEtaSeconds: snapshot.length ? snapshot[0].etaSeconds : 0
+      },
       pool: { size: pool.size, active: pool.activeCount, capacity: pool.totalCapacity }
     });
   } catch (err) {
@@ -504,6 +509,18 @@ function broadcast(payload) {
   const data = JSON.stringify(payload);
   for (const client of wss.clients) {
     if (client.readyState === 1) client.send(data);
+  }
+}
+
+/** Подія про задачу — лише власнику задачі та адміністраторам. */
+function broadcastJob(job) {
+  if (!job) return;
+  const data = JSON.stringify({ type: 'job', job });
+  for (const client of wss.clients) {
+    if (client.readyState !== 1) continue;
+    const user = client.user;
+    if (!user) continue;
+    if (user.role === 'admin' || user.id === job.userId) client.send(data);
   }
 }
 

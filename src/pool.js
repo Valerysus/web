@@ -132,13 +132,19 @@ class WorkerPool {
     }
   }
 
-  /** Найменш завантажений сервер, у якого є вільний слот */
+  /** Найменш завантажений сервер із вільним слотом; серед рівних — найдавніше використаний */
   pick() {
     let best = null;
     for (const w of this.workers.values()) {
       if (!w.ready) continue;
       if (w.active.size >= w.capacity) continue;
-      if (!best || w.active.size < best.active.size) best = w;
+      if (
+        !best ||
+        w.active.size < best.active.size ||
+        (w.active.size === best.active.size && w.lastUsed < best.lastUsed)
+      ) {
+        best = w;
+      }
     }
     return best;
   }

@@ -22,7 +22,7 @@ module.exports = {
   WORKER_HOST: '127.0.0.1',
   WORKER_BASE_PORT: Number(process.env.WORKER_BASE_PORT || 9101),
   MIN_WORKERS: Number(process.env.MIN_WORKERS || 2),
-  MAX_WORKERS: Number(process.env.MAX_WORKERS || 4),
+  MAX_WORKERS: Number(process.env.MAX_WORKERS || 3),
   WORKER_CAPACITY: Number(process.env.WORKER_CAPACITY || 1),
 
   // Обмеження трудомісткості однієї задачі

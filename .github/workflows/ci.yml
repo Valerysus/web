@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Встановлення залежностей
+        run: npm ci
+
+      - name: Перевірка синтаксису
+        run: |
+          for f in src/*.js shared/*.js scripts/*.js public/js/*.js; do
+            node --check "$f"
+          done
+
+      - name: Тест обчислювального ядра
+        run: node scripts/test-solver.js
+
+      - name: Запуск системи та smoke-тест API
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
+        run: |
+          npm start &
+          for i in $(seq 1 60); do
+            if curl -sk https://localhost:8443/api/limits > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/smoke-test.js

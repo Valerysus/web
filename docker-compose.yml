@@ -1,0 +1,19 @@
+services:
+  lb:
+    build: .
+    command: node scripts/start.js
+    ports:
+      - "8443:8443"
+    environment:
+      MIN_WORKERS: "2"
+      MAX_WORKERS: "4"
+      WORKER_CAPACITY: "1"
+      JWT_SECRET: "change-me-in-production"
+    volumes:
+      - appdata:/app/data
+      - certs:/app/certs
+    restart: unless-stopped
+
+volumes:
+  appdata:
+  certs:

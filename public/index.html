@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Розподілена система обчислень</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <div>
+      <h1>Розподілена система обчислень</h1>
+      <p class="sub">HTTPS · балансування навантаження · черга · автомасштабування</p>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" data-view="app">Застосунок</button>
+    <button class="nav-btn" data-view="theory">Теорія до захисту</button>
+    <button class="nav-btn" data-view="arch">Архітектура</button>
+    <span id="userBadge" class="badge hidden"></span>
+    <button id="logoutBtn" class="btn ghost hidden">Вийти</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============================ AUTH ============================ -->
+  <section id="authView" class="view">
+    <div class="auth-card">
+      <h2>Вхід до системи</h2>
+      <p class="muted">Авторизація обов'язкова: задачі прив'язані до користувача.</p>
+
+      <div class="tabs">
+        <button class="tab active" data-auth="login">Вхід</button>
+        <button class="tab" data-auth="register">Реєстрація</button>
+      </div>
+
+      <form id="authForm" autocomplete="on">
+        <label>Email
+          <input type="email" id="email" required placeholder="user@local">
+        </label>
+        <label>Пароль
+          <input type="password" id="password" required minlength="6" placeholder="••••••">
+        </label>
+        <button type="submit" class="btn primary" id="authSubmit">Увійти</button>
+        <p id="authError" class="error hidden"></p>
+      </form>
+
+      <div class="demo-accounts">
+        <strong>Демо-акаунти</strong>
+        <code>user@local / user123</code>
+        <code>admin@local / admin123</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ APP ============================ -->
+  <section id="appView" class="view hidden">
+
+    <div class="grid">
+
+      <!-- Нова задача -->
+      <div class="card">
+        <h2>Нова задача</h2>
+        <p class="muted">Розв'язання рівняння Пуассона −Δu = f на сітці (метод скінченних різниць + SOR).</p>
+
+        <form id="jobForm">
+          <label>Кількість невідомих (вузлів сітки)
+            <input type="number" id="n" value="40000" min="4" max="250000" step="1" required>
+            <small id="nHint" class="hint"></small>
+          </label>
+
+          <label>Максимум ітерацій
+            <input type="number" id="maxIter" value="2000" min="1" max="20000" required>
+          </label>
+
+          <label>Точність ε
+            <input type="number" id="tol" value="0.000001" step="any" min="1e-12" max="1e-2" required>
+          </label>
+
+          <label>Коефіцієнт релаксації ω
+            <input type="number" id="omega" value="1.9" step="0.05" min="0.05" max="1.95">
+          </label>
+
+          <div class="workload">
+            <div class="workload-row">
+              <span>Трудомісткість</span>
+              <strong id="workloadValue">—</strong>
+            </div>
+            <div class="bar"><div id="workloadBar" class="bar-fill"></div></div>
+            <small id="workloadHint" class="hint"></small>
+          </div>
+
+          <button type="submit" class="btn primary" id="runBtn">Запустити обчислення</button>
+          <p id="jobError" class="error hidden"></p>
+        </form>
+      </div>
+
+      <!-- Стан системи -->
+      <div class="card">
+        <h2>Стан системи</h2>
+        <div class="stats">
+          <div class="stat"><span id="statServers">—</span><small>серверів</small></div>
+          <div class="stat"><span id="statActive">—</span><small>активних</small></div>
+          <div class="stat"><span id="statQueue">—</span><small>у черзі</small></div>
+          <div class="stat"><span id="statLoad">—</span><small>навантаження</small></div>
+        </div>
+        <div class="bar big"><div id="loadBar" class="bar-fill"></div></div>
+        <p class="muted small">Балансувальник розподіляє задачі на найменш завантажений сервер застосунку. Якщо всі слоти зайняті — задача стає в чергу із зазначенням приблизного часу очікування.</p>
+        <div id="queueInfo" class="queue-info hidden"></div>
+      </div>
+
+      <!-- Мої задачі -->
+      <div class="card wide">
+        <div class="card-head">
+          <h2>Мої задачі</h2>
+          <button id="refreshBtn" class="btn ghost small">Оновити</button>
+        </div>
+        <div id="jobsList" class="jobs">
+          <p class="muted">Задач ще немає.</p>
+        </div>
+      </div>
+
+      <!-- Адмінка -->
+      <div class="card wide hidden" id="adminCard">
+        <div class="card-head">
+          <h2>Панель адміністратора</h2>
+          <div class="row">
+            <button class="btn ghost small" data-scale="up">+ сервер</button>
+            <button class="btn ghost small" data-scale="down">− сервер</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><span id="admUsers">—</span><small>користувачів</small></div>
+          <div class="stat"><span id="admRunning">—</span><small>виконується</small></div>
+          <div class="stat"><span id="admQueued">—</span><small>у черзі</small></div>
+          <div class="stat"><span id="admDone">—</span><small>завершено</small></div>
+        </div>
+        <h3>Сервери застосунків</h3>
+        <table class="table" id="serversTable">
+          <thead><tr><th>ID</th><th>Порт</th><th>Активних</th><th>Ємність</th><th>Uptime</th><th>Простой</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3>Журнал подій</h3>
+        <div id="adminLog" class="log"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================ THEORY ============================ -->
+  <section id="theoryView" class="view hidden">
+    <div class="card wide">
+      <h2>Матеріали до захисту</h2>
+      <p class="muted">Стислі відповіді на питання з <code>Reports.txt</code> + тема презентації (HTTP 1.0 → 3.0).</p>
+
+      <div class="accordion" id="theoryAccordion"></div>
+    </div>
+  </section>
+
+  <!-- ============================ ARCH ============================ -->
+  <section id="archView" class="view hidden">
+    <div class="card wide">
+      <h2>Архітектура рішення</h2>
+      <pre class="diagram">
+   браузер ──HTTPS──┐
+   браузер ──WSS────┤
+                    ▼
+        ┌───────────────────────────────────┐
+        │  Балансувальник (LB)  :8443       │
+        │  TLS + Express + WebSocket        │
+        │  черга задач · автомасштабування  │
+        └────────┬───────────────┬──────────┘
+                 │               │
+        ┌────────▼──────┐ ┌──────▼────────┐
+        │  app-1 :9101  │ │  app-2 :9102  │   … app-N (до MAX)
+        │  worker_      │ │  worker_      │
+        │  threads      │ │  threads      │
+        └────────┬──────┘ └──────┬────────┘
+                 │               │
+                 └───────┬───────┘
+                         ▼
+              ┌─────────────────────────┐
+              │  SQLite (WAL)           │
+              │  users · jobs · events  │
+              └─────────────────────────┘
+      </pre>
+      <h3>Як виконано вимоги</h3>
+      <table class="table">
+        <thead><tr><th>Пункт ТЗ</th><th>Реалізація</th></tr></thead>
+        <tbody>
+          <tr><td>1. Обмеження трудомісткості</td><td>Валідація на клієнті (живий індикатор бюджету) + повторна на сервері: невідомих ≤ 250 000, ітерацій ≤ 20 000, невідомі×ітерації ≤ 600 млн, таймаут 60 с</td></tr>
+          <tr><td>2. Прогрес виконання</td><td>WebSocket (WSS) — відсоток, етап, номер ітерації, норма нев'язки</td></tr>
+          <tr><td>3. Історія / статус / скасування</td><td>Таблиця <code>jobs</code>, ліміт 3 активних і 20 в історії, скасування через <code>cancel_flag</code> + <code>worker.terminate()</code></td></tr>
+          <tr><td>4. Авторизація + HTTPS</td><td>JWT + bcrypt, TLS-сертифікат, WSS</td></tr>
+          <tr><td>5. Балансування ≥ 2 серверів</td><td>Пул процесів <code>app-1…app-N</code>, вибір найменш завантаженого, health-check</td></tr>
+          <tr><td>6. Черга + ETA (+бали)</td><td>Черга в БД, позиція та оцінка часу за середньою тривалістю</td></tr>
+          <tr><td>7. Автомасштабування (+бали)</td><td>scale-up при черзі, scale-down після 45 с простою, межі MIN/MAX</td></tr>
+          <tr><td>8. Панель адміністратора (+бали)</td><td>Метрики, таблиця серверів, журнал, ручне керування пулом</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script src="/js/theory.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

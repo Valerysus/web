@@ -1,0 +1,25 @@
+{
+  "name": "vovk-web-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Розподілена веб-система для трудомістких обчислень: HTTPS, балансування навантаження, черга, автомасштабування, панель адміністратора",
+  "type": "commonjs",
+  "main": "src/lb.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node scripts/start.js",
+    "test": "node scripts/test-solver.js",
+    "test:e2e": "node scripts/smoke-test.js",
+    "cert": "node scripts/gen-cert.js",
+    "reset-db": "node scripts/reset-db.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "selfsigned": "^2.4.1",
+    "ws": "^8.18.0"
+  }
+}

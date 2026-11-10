@@ -1,0 +1,19 @@
+{
+  "name": "Розподілена система обчислень",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "forwardPorts": [8443],
+  "portsAttributes": {
+    "8443": {
+      "label": "HTTPS застосунок",
+      "onAutoForward": "notify",
+      "protocol": "https"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm start",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint"]
+    }
+  }
+}

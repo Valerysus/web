@@ -10,7 +10,7 @@
     }
   },
   "postCreateCommand": "npm install",
-  "postStartCommand": "npm start",
+  "postStartCommand": "git pull --ff-only origin main || true; npm start",
   "customizations": {
     "vscode": {
       "extensions": ["dbaeumer.vscode-eslint"]

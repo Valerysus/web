@@ -34,7 +34,7 @@ function collect(token, ms) {
     const ws = new WebSocket(`${WS}/ws?token=${encodeURIComponent(token)}`);
     const messages = [];
     ws.on('message', (raw) => {
-      try { messages.push(JSON.parse(raw)); } catch {  }
+      try { messages.push(JSON.parse(raw)); } catch { /* ignore */ }
     });
     ws.on('error', () => {  });
     setTimeout(() => { ws.close(); resolve(messages); }, ms);

@@ -399,7 +399,7 @@ const internal = http.createServer((req, res) => {
   req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
     let body = {};
-    try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch {  }
+    try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { /* ignore */ }
     const url = new URL(req.url, 'http://localhost');
 
     if (url.pathname === '/internal/progress') {

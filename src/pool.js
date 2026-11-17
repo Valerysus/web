@@ -115,7 +115,7 @@ class WorkerPool {
       try {
         const res = await request(port, '/health');
         if (res.status === 200) { worker.ready = true; break; }
-      } catch {  }
+      } catch { /* ignore */ }
       await new Promise((r) => setTimeout(r, 100));
     }
     if (!worker.ready) logWorker(id, 'warning', 'не відповів на health-check');
@@ -170,7 +170,7 @@ class WorkerPool {
     for (const w of this.workers.values()) {
       if (w.active.has(jobId)) {
         try { await request(w.port, '/cancel', { id: jobId }, { 'x-internal-token': 'worker' }); }
-        catch {  }
+        catch { /* ignore */ }
         w.active.delete(jobId);
         return true;
       }
@@ -181,8 +181,8 @@ class WorkerPool {
   async stopWorker(id) {
     const w = this.workers.get(id);
     if (!w) return false;
-    try { await request(w.port, '/shutdown', {}, { 'x-internal-token': 'worker' }); } catch {  }
-    setTimeout(() => { try { w.proc.kill(); } catch {  } }, 500);
+    try { await request(w.port, '/shutdown', {}, { 'x-internal-token': 'worker' }); } catch { /* ignore */ }
+    setTimeout(() => { try { w.proc.kill(); } catch { /* ignore */ } }, 500);
     this.workers.delete(id);
     logWorker(id, 'scaled-down', 'автоматичне зменшення пулу');
     return true;
@@ -218,7 +218,7 @@ class WorkerPool {
   async shutdownAll() {
     for (const id of [...this.workers.keys()]) {
       const w = this.workers.get(id);
-      try { w.proc.kill(); } catch {  }
+      try { w.proc.kill(); } catch { /* ignore */ }
     }
     this.workers.clear();
   }

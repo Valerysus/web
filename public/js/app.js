@@ -400,7 +400,7 @@ async function loadAdmin() {
       ...log.workers.map((w) => `<div><span class="t">${esc(w.created_at)}</span> [${esc(w.worker_id)}] ${esc(w.action)} ${esc(w.detail || '')}</div>`),
       ...log.events.map((e) => `<div><span class="t">${esc(e.created_at)}</span> [job n=${Number(e.n)}] ${esc(e.message)}</div>`)
     ].join('');
-  } catch {  }
+  } catch { /* ignore */ }
 }
 
 $$('[data-scale]').forEach((btn) => {

@@ -1,10 +1,6 @@
 'use strict';
 
-/**
- * Сервер застосунку (application server).
- * Отримує задачу від балансувальника, виконує її у окремому робочому потоці
- * (worker_threads) і надсилає прогрес назад у балансувальник.
- */
+
 
 const http = require('node:http');
 const { Worker } = require('node:worker_threads');
@@ -15,7 +11,7 @@ const WORKER_ID = process.env.WORKER_ID || `app-${process.env.PORT}`;
 const PORT = Number(process.env.PORT);
 const LB_INTERNAL = process.env.LB_INTERNAL || 'http://127.0.0.1:8444';
 
-const active = new Map(); // jobId -> { thread, cancelled }
+const active = new Map();
 
 function post(pathname, body) {
   return new Promise((resolve) => {

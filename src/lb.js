@@ -1,14 +1,6 @@
 'use strict';
 
-/**
- * Балансувальник навантаження (load balancer) — єдина точка входу.
- *  - HTTPS (TLS) для клієнтів
- *  - WSS (WebSocket over TLS) для інформування про прогрес
- *  - REST API: авторизація, задачі, історія, скасування
- *  - черга задач + оцінка часу очікування
- *  - автомасштабування пулу серверів застосунків
- *  - панель адміністратора
- */
+
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -31,7 +23,7 @@ const { WorkerPool } = require('./pool');
 const pool = new WorkerPool();
 const startedAt = Date.now();
 
-/* ------------------------------------------------------------------ TLS */
+
 
 function loadCertificates() {
   const keyPath = path.join(CERT_DIR, 'key.pem');
@@ -43,7 +35,7 @@ function loadCertificates() {
   return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
 }
 
-/* --------------------------------------------------------------- helpers */
+
 
 function jobRow(id) {
   return db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
@@ -72,7 +64,7 @@ function jobDto(row) {
   };
 }
 
-/** Оцінка середньої тривалості задачі за історією (сек) */
+
 function averageDuration() {
   const row = db.prepare(`
     SELECT AVG((julianday(finished_at) - julianday(started_at)) * 86400.0) AS avg
@@ -101,7 +93,7 @@ function queueEntry(jobId) {
   return queueSnapshot().find((s) => s.id === jobId) || null;
 }
 
-/* ------------------------------------------------------------ validation */
+
 
 function validateJobInput(body) {
   const errors = [];
@@ -130,7 +122,7 @@ function validateJobInput(body) {
   return { errors, value: { n, maxIter, tol, omega, workUnits } };
 }
 
-/* ---------------------------------------------------------------- express */
+
 
 const app = express();
 app.disable('x-powered-by');
@@ -149,7 +141,7 @@ app.use((req, res, next) => {
 
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'] }));
 
-/** Express 4 не перехоплює відхилені проміси — обгортаємо async-обробники. */
+
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function auth(req, res, next) {
@@ -169,9 +161,9 @@ function adminOnly(req, res, next) {
   next();
 }
 
-/* ------------------------------------------------------------ rate limit */
 
-/** Простий ліміт спроб входу: 10 невдач на 15 хвилин з однієї IP. */
+
+
 const loginAttempts = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILS = 10;
@@ -204,7 +196,7 @@ function clearLoginFailures(req) {
   loginAttempts.delete(req.ip || req.socket.remoteAddress || 'unknown');
 }
 
-/* ------------------------------------------------------------------- auth */
+
 
 app.post('/api/auth/register', wrap(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
@@ -240,7 +232,7 @@ app.post('/api/auth/login', loginRateLimit, wrap(async (req, res) => {
 
 app.get('/api/auth/me', auth, (req, res) => res.json({ user: req.user }));
 
-/* ------------------------------------------------------------------- jobs */
+
 
 app.get('/api/limits', (req, res) => {
   res.json({
@@ -272,7 +264,7 @@ app.post('/api/jobs', auth, (req, res) => {
 
   logEvent(id, `Задачу створено: n=${value.n}, ітерацій=${value.maxIter}, точність=${value.tol}`);
 
-  // Обрізаємо історію користувача
+
   const extra = db.prepare(`
     SELECT id FROM jobs WHERE user_id = ? AND status IN ('done','failed','cancelled')
     ORDER BY created_at DESC LIMIT -1 OFFSET ?
@@ -329,7 +321,7 @@ app.post('/api/jobs/:id/cancel', auth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-/* ---------------------------------------------------------------- admin */
+
 
 app.get('/api/admin/overview', auth, adminOnly, (req, res) => {
   const counts = db.prepare(`
@@ -397,7 +389,7 @@ app.post('/api/admin/scale', auth, adminOnly, wrap(async (req, res) => {
   res.json({ ok: true, size: pool.size });
 }));
 
-/* ------------------------------------------------------- internal channel */
+
 
 const internal = http.createServer((req, res) => {
   if (req.headers['x-internal-secret'] !== INTERNAL_SECRET) {
@@ -407,7 +399,7 @@ const internal = http.createServer((req, res) => {
   req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
     let body = {};
-    try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { /* ignore */ }
+    try { body = JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch {  }
     const url = new URL(req.url, 'http://localhost');
 
     if (url.pathname === '/internal/progress') {
@@ -465,9 +457,9 @@ const internal = http.createServer((req, res) => {
   });
 });
 
-/* ------------------------------------------------------- error handling */
 
-// Має бути після всіх маршрутів: жоден збій не повинен валити процес
+
+
 app.use((err, req, res, next) => {
   console.error('[lb] помилка запиту:', err && err.message);
   if (res.headersSent) return next(err);
@@ -478,14 +470,14 @@ process.on('unhandledRejection', (err) => {
   console.error('[lb] необроблена відмова промісу:', err && err.message);
 });
 
-/* ------------------------------------------------------------- scheduler */
+
 let ticking = false;
 
 async function tick() {
   if (ticking) return;
   ticking = true;
   try {
-    // 1. Задачі, що "зависли" на зниклих серверах — повертаємо в чергу
+
     const running = db.prepare("SELECT * FROM jobs WHERE status = 'running'").all();
     const alive = new Set(pool.list().map((s) => s.id));
     for (const job of running) {
@@ -498,7 +490,7 @@ async function tick() {
       }
     }
 
-    // 2. Роздача задач із черги
+
     const queued = db.prepare(
       "SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at ASC"
     ).all();
@@ -520,11 +512,11 @@ async function tick() {
       }
     }
 
-    // 3. Автомасштабування
+
     const remaining = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status = 'queued'").get().c;
     await pool.autoscale(remaining);
 
-    // 4. Періодичне оновлення черги для клієнтів
+
     const snapshot = queueSnapshot();
     broadcast({
       type: 'queue',
@@ -543,15 +535,11 @@ async function tick() {
   }
 }
 
-/* ------------------------------------------------------------- websocket */
+
 
 const wss = new WebSocketServer({ noServer: true });
 
-/**
- * Подія 'job' — лише власнику задачі та адміністраторам.
- * Подія 'queue' — звичайному користувачу лише агрегована статистика пулу
- * та позиції його власних задач; адмін отримує все.
- */
+
 function broadcast(payload, ownerUserId) {
   const data = JSON.stringify(payload);
   for (const client of wss.clients) {
@@ -587,13 +575,13 @@ function broadcast(payload, ownerUserId) {
   }
 }
 
-/** Подія про задачу — лише власнику задачі та адміністраторам. */
+
 function broadcastJob(job) {
   if (!job) return;
   broadcast({ type: 'job', job }, job.userId);
 }
 
-/* ------------------------------------------------------------------ boot */
+
 
 async function main() {
   const tls = loadCertificates();
@@ -614,7 +602,7 @@ async function main() {
 
   wss.on('connection', (ws) => {
     ws.send(JSON.stringify({ type: 'hello', user: ws.user, pool: { size: pool.size } }));
-    ws.on('error', () => { /* ignore */ });
+    ws.on('error', () => {  });
   });
 
   internal.listen(INTERNAL_PORT, '127.0.0.1');

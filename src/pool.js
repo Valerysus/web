@@ -1,9 +1,6 @@
 'use strict';
 
-/**
- * Пул серверів застосунків + автомасштабування (горизонтальне розширення).
- * Кожен "сервер застосунку" — окремий процес Node.js зі своїм портом.
- */
+
 
 const { fork } = require('node:child_process');
 const http = require('node:http');
@@ -44,13 +41,13 @@ function request(port, pathname, body, headers = {}) {
 
 class WorkerPool {
   constructor() {
-    this.workers = new Map(); // id -> { id, port, proc, capacity, active:Set, lastUsed, ready }
+    this.workers = new Map();
     this.nextIndex = 0;
     this.scaling = false;
     this.manualHoldUntil = 0;
   }
 
-  /** Тимчасово вимкнути автоматику після ручної зміни розміру пулу */
+
   holdAutoscale(ms = 60_000) {
     this.manualHoldUntil = Date.now() + ms;
   }
@@ -113,12 +110,12 @@ class WorkerPool {
       logWorker(id, 'stopped', 'процес завершився');
     });
 
-    // Чекаємо готовності (health-check)
+
     for (let i = 0; i < 60; i++) {
       try {
         const res = await request(port, '/health');
         if (res.status === 200) { worker.ready = true; break; }
-      } catch { /* ще не піднявся */ }
+      } catch {  }
       await new Promise((r) => setTimeout(r, 100));
     }
     if (!worker.ready) logWorker(id, 'warning', 'не відповів на health-check');
@@ -132,7 +129,7 @@ class WorkerPool {
     }
   }
 
-  /** Найменш завантажений сервер із вільним слотом; серед рівних — найдавніше використаний */
+
   pick() {
     let best = null;
     for (const w of this.workers.values()) {
@@ -173,7 +170,7 @@ class WorkerPool {
     for (const w of this.workers.values()) {
       if (w.active.has(jobId)) {
         try { await request(w.port, '/cancel', { id: jobId }, { 'x-internal-token': 'worker' }); }
-        catch { /* ignore */ }
+        catch {  }
         w.active.delete(jobId);
         return true;
       }
@@ -184,17 +181,17 @@ class WorkerPool {
   async stopWorker(id) {
     const w = this.workers.get(id);
     if (!w) return false;
-    try { await request(w.port, '/shutdown', {}, { 'x-internal-token': 'worker' }); } catch { /* ignore */ }
-    setTimeout(() => { try { w.proc.kill(); } catch { /* ignore */ } }, 500);
+    try { await request(w.port, '/shutdown', {}, { 'x-internal-token': 'worker' }); } catch {  }
+    setTimeout(() => { try { w.proc.kill(); } catch {  } }, 500);
     this.workers.delete(id);
     logWorker(id, 'scaled-down', 'автоматичне зменшення пулу');
     return true;
   }
 
-  /** Автомасштабування: вгору за чергою, вниз за простоєм */
+
   async autoscale(queueLength) {
     if (this.scaling) return;
-    // Ручне керування з панелі адміністратора має пріоритет над автоматикою
+
     if (Date.now() < this.manualHoldUntil) return;
     this.scaling = true;
     try {
@@ -221,7 +218,7 @@ class WorkerPool {
   async shutdownAll() {
     for (const id of [...this.workers.keys()]) {
       const w = this.workers.get(id);
-      try { w.proc.kill(); } catch { /* ignore */ }
+      try { w.proc.kill(); } catch {  }
     }
     this.workers.clear();
   }

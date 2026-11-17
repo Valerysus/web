@@ -1,16 +1,8 @@
 'use strict';
 
-/**
- * Обчислювальне ядро: розв'язання двовимірного рівняння Пуассона
- *   -Δu = f  на одиничному квадраті з нульовими граничними умовами Діріхле,
- * методом скінченних різниць із ітераційною схемою SOR (successive over-relaxation).
- *
- * Сітка: `inner` внутрішніх вузлів на сторону, крок h = 1/(inner+1),
- * тобто границі x=0 та x=1 лежать рівно на межах відрізка.
- * Кількість невідомих = inner².
- */
 
-/** Генератор псевдовипадкових чисел (mulberry32) — лишається для сумісності API. */
+
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -22,34 +14,24 @@ function mulberry32(seed) {
   };
 }
 
-/** Права частина f(x,y) — гладка функція, щоб задача мала змістовний розв'язок. */
+
 function sourceFunction(x, y) {
   return 2 * Math.PI * Math.PI * Math.sin(Math.PI * x) * Math.sin(Math.PI * y);
 }
 
-/** Точний розв'язок для контролю похибки: u(x,y) = sin(πx)·sin(πy). */
+
 function exactSolution(x, y) {
   return Math.sin(Math.PI * x) * Math.sin(Math.PI * y);
 }
 
-/**
- * @param {object} opts
- * @param {number} opts.n          бажана кількість невідомих
- * @param {number} opts.maxIter    максимум ітерацій
- * @param {number} opts.tol        точність (максимальна зміна за ітерацію)
- * @param {number} [opts.omega]    коефіцієнт релаксації SOR, 1 < ω < 2
- * @param {number} [opts.seed]     сід генератора (залишено для сумісності API)
- * @param {(p:object)=>void} [opts.onProgress]
- * @param {()=>boolean} [opts.shouldStop]
- * @param {number} [opts.deadline] абсолютний час (ms), після якого треба зупинитись
- */
+
 function solve(opts) {
   const {
     n, maxIter, tol, omega = 1.9,
     onProgress = () => {}, shouldStop = () => false, deadline = Infinity
   } = opts;
 
-  // inner внутрішніх вузлів на сторону; крок сітки h = 1/(inner+1)
+
   const inner = Math.max(2, Math.round(Math.sqrt(n)));
   const unknowns = inner * inner;
   const h = 1 / (inner + 1);
@@ -108,7 +90,7 @@ function solve(opts) {
     if (Date.now() > deadline) { stopped = 'timeout'; break; }
   }
 
-  // Справжня нев'язка дискретної задачі: max |f - A·u|, де A·u = (4u - сусіди)/h²
+
   let residual = 0;
   for (let i = 0; i < inner; i++) {
     for (let j = 0; j < inner; j++) {

@@ -1,10 +1,6 @@
 'use strict';
 
-/**
- * Smoke-тест API: перевіряє авторизацію, ліміти, створення задачі,
- * прогрес, скасування та адмін-метрики на живій системі.
- * Запуск: node scripts/smoke-test.js (система має бути вже запущена)
- */
+
 
 const BASE = process.env.BASE_URL || 'https://localhost:8443';
 

@@ -1,9 +1,6 @@
 'use strict';
 
-/**
- * Тест обчислювального ядра: перевіряє збіжність, похибку та скасування.
- * Запуск: node scripts/test-solver.js
- */
+
 
 const assert = require('node:assert');
 const { solve } = require('../shared/solver');

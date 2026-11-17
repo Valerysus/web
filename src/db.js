@@ -61,7 +61,7 @@ db.exec(`
   );
 `);
 
-/** Міграція для баз, створених попередніми версіями. */
+
 function ensureColumn(table, column, definition) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
   if (!cols.some((c) => c.name === column)) {

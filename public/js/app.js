@@ -1,6 +1,6 @@
 'use strict';
 
-/* ------------------------------------------------------------------ state */
+
 
 const state = {
   token: localStorage.getItem('token') || null,
@@ -16,14 +16,14 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
-/** Екранування тексту перед вставкою в innerHTML. */
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
 }
 
-/* -------------------------------------------------------------------- api */
+
 
 async function api(path, options = {}) {
   const headers = { 'content-type': 'application/json', ...(options.headers || {}) };
@@ -39,7 +39,7 @@ async function api(path, options = {}) {
   return data;
 }
 
-/* ------------------------------------------------------------------- auth */
+
 
 function showAuth() {
   $('#authView').classList.remove('hidden');
@@ -102,7 +102,7 @@ document.querySelector('#logoutBtn').addEventListener('click', () => {
   showAuth();
 });
 
-/* ------------------------------------------------------------------ limits */
+
 
 function readFormClean() {
   return {
@@ -113,7 +113,7 @@ function readFormClean() {
   };
 }
 
-/** Дзеркало серверної валідації — перевірка ще на клієнті (п.1 ТЗ) */
+
 function validateClient(v) {
   const L = state.limits.limits;
   const errors = [];
@@ -159,7 +159,7 @@ function updateWorkload() {
   document.querySelector(sel).addEventListener('input', updateWorkload);
 });
 
-/* ------------------------------------------------------------------- jobs */
+
 
 document.querySelector('#jobForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -276,7 +276,7 @@ async function loadJobs() {
 
 document.querySelector('#refreshBtn').addEventListener('click', loadJobs);
 
-/* ---------------------------------------------------------------- system */
+
 
 function renderSystem(pool, queue, servers) {
   if (pool) {
@@ -341,7 +341,7 @@ function renderServers() {
   if (foot) foot.textContent = `Максимум ${max} сервери. Нові запускаються автоматично, коли з'являється черга.`;
 }
 
-/* --------------------------------------------------------------- websocket */
+
 
 function connectWs() {
   if (state.ws) state.ws.close();
@@ -354,8 +354,7 @@ function connectWs() {
     try { msg = JSON.parse(event.data); } catch { return; }
 
     if (msg.type === 'job') {
-      // Сервер надсилає лише власні задачі (і задачі всіх користувачів для адміна),
-      // тому невідому задачу додаємо тільки якщо вона справді належить нам.
+
       const idx = state.jobs.findIndex((j) => j.id === msg.job.id);
       if (idx >= 0) {
         state.jobs[idx] = { ...state.jobs[idx], ...msg.job };
@@ -375,7 +374,7 @@ function connectWs() {
   };
 }
 
-/* ------------------------------------------------------------------ admin */
+
 
 async function loadAdmin() {
   if (!state.user || state.user.role !== 'admin') return;
@@ -401,7 +400,7 @@ async function loadAdmin() {
       ...log.workers.map((w) => `<div><span class="t">${esc(w.created_at)}</span> [${esc(w.worker_id)}] ${esc(w.action)} ${esc(w.detail || '')}</div>`),
       ...log.events.map((e) => `<div><span class="t">${esc(e.created_at)}</span> [job n=${Number(e.n)}] ${esc(e.message)}</div>`)
     ].join('');
-  } catch { /* не адмін або мережа */ }
+  } catch {  }
 }
 
 $$('[data-scale]').forEach((btn) => {
@@ -418,7 +417,7 @@ $$('[data-scale]').forEach((btn) => {
   });
 });
 
-/* ------------------------------------------------------------------- views */
+
 
 $$('.nav-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -430,7 +429,7 @@ $$('.nav-btn').forEach((btn) => {
   });
 });
 
-/* -------------------------------------------------------------------- boot */
+
 
 async function boot() {
   if (!state.token) { showAuth(); return; }

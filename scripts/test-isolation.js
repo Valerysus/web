@@ -1,14 +1,6 @@
 'use strict';
 
-/**
- * Перевірка ізоляції задач між користувачами:
- *  - користувач A створює задачу;
- *  - користувач B не отримує її у своєму списку;
- *  - WebSocket користувача B не отримує подій про задачу A;
- *  - адміністратор отримує події про задачі всіх користувачів.
- *
- * Запуск: node scripts/test-isolation.js (система має бути запущена)
- */
+
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -42,9 +34,9 @@ function collect(token, ms) {
     const ws = new WebSocket(`${WS}/ws?token=${encodeURIComponent(token)}`);
     const messages = [];
     ws.on('message', (raw) => {
-      try { messages.push(JSON.parse(raw)); } catch { /* ignore */ }
+      try { messages.push(JSON.parse(raw)); } catch {  }
     });
-    ws.on('error', () => { /* ignore */ });
+    ws.on('error', () => {  });
     setTimeout(() => { ws.close(); resolve(messages); }, ms);
   });
 }

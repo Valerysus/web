@@ -83,7 +83,7 @@ function averageDuration() {
 
 function queueSnapshot() {
   const queued = db.prepare(
-    "SELECT id, created_at FROM jobs WHERE status = 'queued' ORDER BY created_at ASC"
+    "SELECT id, user_id, created_at FROM jobs WHERE status = 'queued' ORDER BY created_at ASC"
   ).all();
   const avg = averageDuration();
   const capacity = Math.max(1, pool.totalCapacity);
@@ -91,6 +91,7 @@ function queueSnapshot() {
 
   return queued.map((j, i) => ({
     id: j.id,
+    userId: j.user_id,
     position: i + 1,
     etaSeconds: Math.max(1, Math.round((i + 1) * perSlot))
   }));
@@ -523,15 +524,17 @@ async function tick() {
     const remaining = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status = 'queued'").get().c;
     await pool.autoscale(remaining);
 
-    // 4. Періодичне оновлення черги для клієнтів (без ідентифікаторів чужих задач)
+    // 4. Періодичне оновлення черги для клієнтів
     const snapshot = queueSnapshot();
     broadcast({
       type: 'queue',
       queue: {
         length: snapshot.length,
-        nextEtaSeconds: snapshot.length ? snapshot[0].etaSeconds : 0
+        nextEtaSeconds: snapshot.length ? snapshot[0].etaSeconds : 0,
+        entries: snapshot
       },
-      pool: { size: pool.size, active: pool.activeCount, capacity: pool.totalCapacity }
+      pool: { size: pool.size, active: pool.activeCount, capacity: pool.totalCapacity },
+      servers: pool.list().map((s) => ({ id: s.id, active: s.active, capacity: s.capacity, ready: s.ready }))
     });
   } catch (err) {
     console.error('[scheduler]', err);
@@ -544,23 +547,50 @@ async function tick() {
 
 const wss = new WebSocketServer({ noServer: true });
 
-function broadcast(payload) {
+/**
+ * Подія 'job' — лише власнику задачі та адміністраторам.
+ * Подія 'queue' — звичайному користувачу лише агрегована статистика пулу
+ * та позиції його власних задач; адмін отримує все.
+ */
+function broadcast(payload, ownerUserId) {
   const data = JSON.stringify(payload);
   for (const client of wss.clients) {
-    if (client.readyState === 1) client.send(data);
+    if (client.readyState !== 1) continue;
+    const user = client.user;
+    if (!user) continue;
+
+    if (payload.type === 'job') {
+      if (user.role === 'admin' || user.id === ownerUserId) client.send(data);
+      continue;
+    }
+
+    if (payload.type === 'queue') {
+      if (user.role === 'admin') {
+        client.send(data);
+      } else {
+        const own = (payload.queue.entries || []).filter((e) => e.userId === user.id);
+        client.send(JSON.stringify({
+          type: 'queue',
+          queue: {
+            length: payload.queue.length,
+            nextEtaSeconds: payload.queue.nextEtaSeconds,
+            entries: own.map((e) => ({ id: e.id, position: e.position, etaSeconds: e.etaSeconds }))
+          },
+          pool: payload.pool,
+          servers: payload.servers
+        }));
+      }
+      continue;
+    }
+
+    client.send(data);
   }
 }
 
 /** Подія про задачу — лише власнику задачі та адміністраторам. */
 function broadcastJob(job) {
   if (!job) return;
-  const data = JSON.stringify({ type: 'job', job });
-  for (const client of wss.clients) {
-    if (client.readyState !== 1) continue;
-    const user = client.user;
-    if (!user) continue;
-    if (user.role === 'admin' || user.id === job.userId) client.send(data);
-  }
+  broadcast({ type: 'job', job }, job.userId);
 }
 
 /* ------------------------------------------------------------------ boot */

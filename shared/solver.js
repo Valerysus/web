@@ -38,14 +38,14 @@ function exactSolution(x, y) {
  * @param {number} opts.maxIter    максимум ітерацій
  * @param {number} opts.tol        точність (максимальна зміна за ітерацію)
  * @param {number} [opts.omega]    коефіцієнт релаксації SOR, 1 < ω < 2
- * @param {number} [opts.seed]     сід генератора (варіація амплітуди правої частини)
+ * @param {number} [opts.seed]     сід генератора (залишено для сумісності API)
  * @param {(p:object)=>void} [opts.onProgress]
  * @param {()=>boolean} [opts.shouldStop]
  * @param {number} [opts.deadline] абсолютний час (ms), після якого треба зупинитись
  */
 function solve(opts) {
   const {
-    n, maxIter, tol, omega = 1.9, seed = 1,
+    n, maxIter, tol, omega = 1.9,
     onProgress = () => {}, shouldStop = () => false, deadline = Infinity
   } = opts;
 
@@ -55,14 +55,10 @@ function solve(opts) {
   const h = 1 / (inner + 1);
   const h2 = h * h;
 
-  // Сід лише масштабує амплітуду гладкої правої частини — не додає шуму,
-  // тому похибка відносно аналітичного розв'язку лишається малою.
-  const amplitude = 1 + ((seed % 7) - 3) * 0.01;
-
   const f = new Float64Array(unknowns);
   for (let i = 0; i < inner; i++) {
     for (let j = 0; j < inner; j++) {
-      f[i * inner + j] = amplitude * sourceFunction((i + 1) * h, (j + 1) * h);
+      f[i * inner + j] = sourceFunction((i + 1) * h, (j + 1) * h);
     }
   }
 
@@ -98,7 +94,7 @@ function solve(opts) {
     if (iter % reportEvery === 0 || iter === maxIter) {
       onProgress({
         progress: Math.min(99, Math.round((iter / maxIter) * 100)),
-        stage: `ітерація ${iter} з ${maxIter} (сітка ${inner}×${inner})`,
+        stage: `ітерація ${iter} з ${maxIter} (сітка ${inner}×${inner} вузлів)`,
         iterations: iter,
         delta
       });
@@ -133,7 +129,7 @@ function solve(opts) {
     for (let j = 0; j < inner; j++) {
       const v = u[i * inner + j];
       norm += v * v;
-      const err = Math.abs(v - amplitude * exactSolution((i + 1) * h, (j + 1) * h));
+      const err = Math.abs(v - exactSolution((i + 1) * h, (j + 1) * h));
       if (err > maxError) maxError = err;
     }
   }

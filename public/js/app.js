@@ -7,6 +7,7 @@ const state = {
   user: null,
   limits: null,
   jobs: [],
+  servers: [],
   ws: null,
   adminTimer: null,
   authMode: 'login'
@@ -198,7 +199,11 @@ function showQueueInfo(text) {
 }
 
 function statusLabel(s) {
-  return { queued: 'у черзі', running: 'виконується', done: 'завершено', failed: 'помилка', cancelled: 'скасовано' }[s] || s;
+  return { queued: 'У черзі', running: 'Виконується', done: 'Завершено', failed: 'Помилка', cancelled: 'Скасовано' }[s] || s;
+}
+
+function statusDotClass(s) {
+  return { queued: 'queued', running: 'running', done: 'done', failed: 'failed', cancelled: 'cancelled' }[s] || 'queued';
 }
 
 function renderJobs() {
@@ -210,34 +215,42 @@ function renderJobs() {
 
   box.innerHTML = state.jobs.map((j) => {
     const canCancel = j.status === 'queued' || j.status === 'running';
-    const eta = j.status === 'queued' && j.etaSeconds ? ` · очікування ≈ ${j.etaSeconds} с` : '';
-    const result = j.result && j.result.iterations
-      ? `<div class="job-result">ітерацій: ${j.result.iterations} · сітка: ${j.result.gridSize}×${j.result.gridSize} · зміна: ${Number(j.result.delta).toExponential(2)} · нев'язка: ${Number(j.result.residual).toExponential(2)} · похибка: ${Number(j.result.maxError).toExponential(2)}</div>`
-      : '';
+    const isDone = j.status === 'done';
+    const isQueued = j.status === 'queued';
+
+    let detailLine = '';
+    if (isDone && j.result && j.result.iterations) {
+      detailLine = `<div class="job-result">ітерацій: ${j.result.iterations} · вузлів: ${j.result.gridSize}×${j.result.gridSize} · остання зміна: ${Number(j.result.delta).toExponential(2)} · похибка: ${Number(j.result.maxError).toExponential(2)}</div>`;
+    } else if (isQueued) {
+      const pos = j.queuePosition ? `позиція ${j.queuePosition}` : 'у черзі';
+      const eta = j.etaSeconds ? ` · очікування ≈ ${j.etaSeconds} с` : '';
+      detailLine = `<div class="job-stage">${esc(pos)}${esc(eta)}</div>`;
+    } else {
+      detailLine = `<div class="job-stage">${esc(j.stage)}</div>`;
+    }
+
     const err = j.error ? `<div class="job-result job-error">${esc(j.error)}</div>` : '';
+    const barClass = isDone ? 'bar-fill done' : 'bar-fill';
 
     return `
       <div class="job">
         <div class="job-head">
           <div>
-            <div class="job-title">Пуассон · невідомих ${j.n.toLocaleString('uk-UA')} · ε = ${j.tol}</div>
-            <div class="job-meta">
-              <span>${esc(j.created_at || j.createdAt)}</span>
-              <span>сервер: ${esc(j.workerId || '—')}</span>
-              <span>${j.iterations || 0} ітерацій${eta}</span>
-            </div>
+            <div class="job-title">Пуассон · невідомих ${Number(j.n).toLocaleString('uk-UA')} · ε = ${esc(j.tol)}</div>
+            <div class="job-meta">${esc(j.createdAt || j.created_at || '')} · сервер ${esc(j.workerId || '—')}</div>
           </div>
-          <div class="row">
-            <span class="pill ${esc(j.status)}">${esc(statusLabel(j.status))}</span>
-            ${canCancel ? `<button class="btn ghost small danger" data-cancel="${esc(j.id)}">Скасувати</button>` : ''}
+          <div class="job-status">
+            <span class="status-dot ${statusDotClass(j.status)}"></span>
+            ${esc(statusLabel(j.status))}
           </div>
         </div>
         <div class="job-progress">
-          <div class="bar"><div class="bar-fill" style="width:${Number(j.progress) || 0}%"></div></div>
+          <div class="bar"><div class="${barClass}" style="width:${Number(j.progress) || 0}%"></div></div>
           <span>${Number(j.progress) || 0}%</span>
         </div>
-        <div class="job-stage">${esc(j.stage)}</div>
-        ${result}${err}
+        ${detailLine}
+        ${err}
+        ${canCancel ? `<div class="job-actions"><button class="ghost" data-cancel="${esc(j.id)}">Скасувати</button></div>` : ''}
       </div>`;
   }).join('');
 
@@ -265,24 +278,67 @@ document.querySelector('#refreshBtn').addEventListener('click', loadJobs);
 
 /* ---------------------------------------------------------------- system */
 
-function renderSystem(pool, queue) {
+function renderSystem(pool, queue, servers) {
   if (pool) {
-    document.querySelector('#statServers').textContent = pool.size;
-    document.querySelector('#statActive').textContent = pool.active;
+    const max = state.limits && state.limits.servers ? state.limits.servers.max : pool.size;
+    document.querySelector('#statServers').textContent = `${pool.size} з ${max}`;
+    document.querySelector('#statActive').textContent = `${pool.active} ${pluralTasks(pool.active)}`;
     const load = pool.capacity ? Math.round((pool.active / pool.capacity) * 100) : 0;
     document.querySelector('#statLoad').textContent = load + '%';
-    const bar = document.querySelector('#loadBar');
-    bar.style.width = load + '%';
-    bar.className = 'bar-fill' + (load > 85 ? ' bad' : load > 60 ? ' warn' : '');
   }
   if (queue) {
-    document.querySelector('#statQueue').textContent = queue.length;
+    const eta = queue.nextEtaSeconds ? ` · очікування ≈ ${queue.nextEtaSeconds} с` : '';
+    document.querySelector('#statQueue').textContent = `${queue.length}${eta}`;
     if (queue.length) {
       showQueueInfo(`У черзі ${queue.length} задач. Наступна почнеться ≈ через ${queue.nextEtaSeconds} с.`);
     } else {
       document.querySelector('#queueInfo').classList.add('hidden');
     }
   }
+  if (servers) {
+    state.servers = servers;
+    renderServers();
+  }
+}
+
+function pluralTasks(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'задача';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'задачі';
+  return 'задач';
+}
+
+function renderServers() {
+  const box = document.querySelector('#serversList');
+  if (!box) return;
+  if (!state.servers.length) {
+    box.innerHTML = '<p class="muted">Серверів немає.</p>';
+    return;
+  }
+  const isAdmin = state.user && state.user.role === 'admin';
+  box.innerHTML = state.servers.map((s) => {
+    const pct = s.capacity ? Math.round((s.active / s.capacity) * 100) : 0;
+    const meta = isAdmin && s.port
+      ? `порт ${s.port} · ${s.active} з ${s.capacity}`
+      : `${s.active} з ${s.capacity}`;
+    const starting = s.ready === false
+      ? '<div class="server-starting">запускається…</div>'
+      : '';
+    return `
+      <div class="server-row">
+        <div class="server-head">
+          <span class="server-name">${esc(s.id)}</span>
+          <span class="server-meta">${esc(meta)}</span>
+        </div>
+        <div class="server-bar"><div class="server-bar-fill" style="width:${pct}%"></div></div>
+        ${starting}
+      </div>`;
+  }).join('');
+
+  const max = state.limits && state.limits.servers ? state.limits.servers.max : 3;
+  const foot = document.querySelector('#serversFoot');
+  if (foot) foot.textContent = `Максимум ${max} сервери. Нові запускаються автоматично, коли з'являється черга.`;
 }
 
 /* --------------------------------------------------------------- websocket */
@@ -310,7 +366,7 @@ function connectWs() {
       }
       renderJobs();
     } else if (msg.type === 'queue') {
-      renderSystem(msg.pool, msg.queue);
+      renderSystem(msg.pool, msg.queue, msg.servers);
     }
   };
 
@@ -390,6 +446,12 @@ async function boot() {
   }
 
   state.limits = await api('/api/limits');
+  const L = state.limits.limits;
+  const heroLimits = document.querySelector('#heroLimits');
+  if (heroLimits) {
+    heroLimits.textContent =
+      `До ${L.maxUnknowns.toLocaleString('uk-UA')} невідомих · до ${L.maxIterations.toLocaleString('uk-UA')} ітерацій · до ${L.maxSeconds} секунд на задачу`;
+  }
   showApp();
   updateWorkload();
   await loadJobs();
